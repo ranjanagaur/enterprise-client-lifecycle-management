@@ -1,0 +1,35 @@
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  background: #f3f6f9;
+}
+
+#root {
+  min-height: 100vh;
+  max-width: none;
+  text-align: left;
+}
+
+button,
+input {
+  font: inherit;
+}

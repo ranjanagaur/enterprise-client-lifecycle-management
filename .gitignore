@@ -1,0 +1,20 @@
+.env
+# Environment variables and secrets
+.env
+
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Node dependencies
+node_modules/
+
+# Build output
+dist/
+clients.json
+# Personal Python practice files
+lesson*.py
+client_registration.py
