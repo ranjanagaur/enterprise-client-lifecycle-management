@@ -7,6 +7,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from backend.database import SessionLocal, engine, Base
+from backend.foundation import attach_foundation_records, ensure_foundation_records
+from backend.portal import create_customer_account, router as portal_router
+from backend.schema_updates import apply_schema_updates
+from backend.security import get_employee
+from backend.seed import seed_catalogue, seed_demo_accounts
 from backend import models, schemas
 
 
@@ -16,10 +21,19 @@ from backend import models, schemas
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create database tables when the application starts
+    # Create any missing tables, then backfill organisation and application rows.
     Base.metadata.create_all(bind=engine)
+    apply_schema_updates()
 
-    print("Database tables created successfully!")
+    db = SessionLocal()
+    try:
+        created = ensure_foundation_records(db)
+        seed_catalogue(db)
+        seed_demo_accounts(db)
+        print("Database tables created successfully!")
+        print(f"Foundation records created for existing clients: {created}")
+    finally:
+        db.close()
 
     yield
 
@@ -34,6 +48,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+app.include_router(portal_router)
 
 
 # --------------------------------------------------
@@ -118,6 +134,15 @@ def register_client(
 
     try:
         db.add(new_client)
+        db.flush()
+        attach_foundation_records(db, new_client)
+        create_customer_account(
+            db,
+            new_client,
+            client.password,
+            client.designation,
+            client.trading_name,
+        )
         db.commit()
         db.refresh(new_client)
 
@@ -137,7 +162,49 @@ def register_client(
 # --------------------------------------------------
 
 @app.get("/clients", response_model=list[schemas.ClientResponse])
-def get_clients(db: Session = Depends(get_db)):
+def get_clients(
+    db: Session = Depends(get_db),
+    employee: models.User = Depends(get_employee),
+):
     clients = db.query(models.Client).all()
 
     return clients
+
+
+# --------------------------------------------------
+# LIST ONBOARDING APPLICATIONS
+# --------------------------------------------------
+
+@app.get("/applications", response_model=list[schemas.ApplicationResponse])
+def get_applications(
+    db: Session = Depends(get_db),
+    employee: models.User = Depends(get_employee),
+):
+    """Read-only list used to verify the new application records.
+
+    This endpoint is open, like GET /clients, until authentication is added.
+    """
+
+    rows = (
+        db.query(models.OnboardingApplication, models.Organisation)
+        .join(
+            models.Organisation,
+            models.OnboardingApplication.organisation_id == models.Organisation.id,
+        )
+        .order_by(models.OnboardingApplication.id.desc())
+        .all()
+    )
+
+    return [
+        schemas.ApplicationResponse(
+            id=application.id,
+            reference=application.reference,
+            status=application.status,
+            organisation_id=organisation.id,
+            client_id=organisation.client_id,
+            legal_name=organisation.legal_name,
+            country_of_incorporation=organisation.country_of_incorporation,
+            created_at=application.created_at,
+        )
+        for application, organisation in rows
+    ]

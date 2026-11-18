@@ -18,3 +18,6 @@ clients.json
 # Personal Python practice files
 lesson*.py
 client_registration.py
+
+# Private uploaded documents
+backend/storage/

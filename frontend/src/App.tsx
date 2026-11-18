@@ -1,523 +1,438 @@
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import "./App.css";
-import ClientOnboarding from "./ClientOnboarding";
-import RiskAssessment from "./RiskAssessment";
+import "./review.css";
+import { api, getToken, openDocument, setToken } from "./api";
 
-type Client = {
-  id: number;
-  company_name: string;
-  registration_number: string | null;
-  country: string;
-  contact_name: string;
-  business_email: string;
-  contact_number: string;
-  onboarding_status: string;
+type Page = "Dashboard" | "Applications" | "Review";
+
+type Summary = {
+  total: number;
+  pending: number;
+  submitted: number;
+  under_review: number;
+  information_required: number;
+  approved: number;
+  rejected: number;
+  activity: { id: number; event: string; detail: string | null }[];
 };
 
-const API_URL = "http://127.0.0.1:8000";
+type ApplicationRow = {
+  id: number;
+  reference: string;
+  legal_name: string;
+  country: string;
+  registration_number: string | null;
+  email: string;
+  status: string;
+  risk: string;
+  outstanding: number;
+};
 
-const navigation = [
-  { name: "Dashboard", icon: "⌂" },
-  { name: "Client Onboarding", icon: "＋" },
-  { name: "Client Directory", icon: "▤" },
-  { name: "Documents", icon: "▧" },
-  { name: "KYC & Due Diligence", icon: "◈" },
-  { name: "Risk Assessment", icon: "△" },
-  { name: "Approvals", icon: "✓" },
-  { name: "Reports", icon: "▥" },
-  { name: "User Management", icon: "♙" },
-  { name: "Settings", icon: "⚙" },
-];
+type Detail = {
+  application: { id: number; reference: string; status: string };
+  organisation: Record<string, string | null>;
+  questionnaire: {
+    response_status: string;
+    sections: { title: string; questions: { prompt: string; answer: string; required: boolean }[] }[];
+  };
+  documents: {
+    id: number;
+    description: string | null;
+    status: string;
+    feedback: string | null;
+    versions: { id: number; version_number: number; filename: string }[];
+  }[];
+  parties: { full_name: string; party_type: string; ownership_percentage: string | null }[];
+  requests: { id: number; reference: string; description: string; status: string; due_date: string | null }[];
+  risk: { score: number; level: string; methodology: string; notes: string | null }[];
+  audit: { id: number; event: string; detail: string | null; created_at: string | null }[];
+};
+
+const navigation: Page[] = ["Dashboard", "Applications"];
 
 function App() {
-  const [activePage, setActivePage] = useState("Dashboard");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [token, setTokenState] = useState(getToken());
+  const [page, setPage] = useState<Page>("Dashboard");
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [rows, setRows] = useState<ApplicationRow[]>([]);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [selected, setSelected] = useState<number | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [error, setError] = useState("");
 
-  const [clients, setClients] = useState<Client[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiError, setApiError] = useState("");
-
-  // Retrieve client records from FastAPI
-  const fetchClients = async () => {
-    try {
-      setIsLoading(true);
-      setApiError("");
-
-      const response = await fetch(`${API_URL}/clients`);
-
-      if (!response.ok) {
-        throw new Error("Unable to retrieve client records.");
-      }
-
-      const data: Client[] = await response.json();
-      setClients(data);
-    } catch (error) {
-      setApiError(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong while fetching clients."
-      );
-    } finally {
-      setIsLoading(false);
-    }
+  const loadLists = async () => {
+    const [dash, applications] = await Promise.all([
+      api<Summary>("/employee/dashboard"),
+      api<ApplicationRow[]>(`/employee/applications?search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`),
+    ]);
+    setSummary(dash);
+    setRows(applications);
   };
 
   useEffect(() => {
-    fetchClients();
-  }, []);
+    if (!token) return;
+    loadLists().catch((reason: Error) => setError(reason.message));
+  }, [token, search, status]);
 
-  // Search clients
-  const filteredClients = clients.filter((client) =>
-    [
-      client.id,
-      client.company_name,
-      client.country,
-      client.contact_name,
-      client.business_email,
-      client.onboarding_status,
-    ]
-      .join(" ")
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    if (!selected) return;
+    api<Detail>(`/employee/applications/${selected}`)
+      .then(setDetail)
+      .catch((reason: Error) => setError(reason.message));
+  }, [selected]);
 
-  // Dashboard statistics
-  const approvedCount = clients.filter(
-    (client) => client.onboarding_status === "Approved"
-  ).length;
-
-  const reviewCount = clients.filter(
-    (client) => client.onboarding_status === "Under Review"
-  ).length;
-
-  const pendingCount = clients.filter(
-    (client) => client.onboarding_status === "Pending"
-  ).length;
-
-  const handleNavigation = (page: string) => {
-    setActivePage(page);
-    setSearchTerm("");
+  const openApplication = (id: number) => {
+    setSelected(id);
+    setPage("Review");
   };
 
-  // Reusable loading and error messages
-  const renderDataMessage = (columnCount: number) => {
-    if (isLoading) {
-      return (
-        <tr>
-          <td colSpan={columnCount} className="empty-table">
-            Loading client records...
-          </td>
-        </tr>
-      );
-    }
-
-    if (apiError) {
-      return (
-        <tr>
-          <td colSpan={columnCount} className="empty-table">
-            {apiError}
-          </td>
-        </tr>
-      );
-    }
-
-    if (filteredClients.length === 0) {
-      return (
-        <tr>
-          <td colSpan={columnCount} className="empty-table">
-            No matching client applications found.
-          </td>
-        </tr>
-      );
-    }
-
-    return null;
-  };
-
-  // Reusable client table
-  const renderClientTable = () => (
-    <div className="table-wrapper">
-      <table className="client-table">
-        <thead>
-          <tr>
-            <th>Client ID</th>
-            <th>Client Name</th>
-            <th>Country</th>
-            <th>Client Type</th>
-            <th>Submitted</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {filteredClients.map((client) => (
-            <tr key={client.id}>
-              <td className="application-id">
-                {client.id}
-              </td>
-
-              <td className="client-name">
-                {client.company_name}
-              </td>
-
-              <td>{client.country}</td>
-
-              <td>Corporate</td>
-
-              <td>—</td>
-
-              <td>
-                <span
-                  className={`status-badge ${client.onboarding_status
-                    .toLowerCase()
-                    .replaceAll(" ", "-")}`}
-                >
-                  {client.onboarding_status}
-                </span>
-              </td>
-            </tr>
-          ))}
-
-          {renderDataMessage(6)}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  // Dashboard
-  const renderDashboard = () => (
-    <>
-      <div className="page-heading">
-        <div>
-          <h1>Dashboard</h1>
-          <p>
-            Welcome to your Enterprise Client Onboarding workspace.
-            Here's your onboarding activity overview.
-          </p>
-        </div>
-
-        <button
-          className="primary-button"
-          onClick={() => handleNavigation("Client Onboarding")}
-        >
-          + Start New Onboarding
-        </button>
-      </div>
-
-      <section className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon blue">▤</div>
-          <div>
-            <p className="stat-label">Total Applications</p>
-            <h2>{isLoading ? "..." : clients.length}</h2>
-            <span className="stat-caption">Client applications</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon green">✓</div>
-          <div>
-            <p className="stat-label">Approved</p>
-            <h2>{isLoading ? "..." : approvedCount}</h2>
-            <span className="stat-caption">Successfully approved</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon orange">◷</div>
-          <div>
-            <p className="stat-label">Under Review</p>
-            <h2>{isLoading ? "..." : reviewCount}</h2>
-            <span className="stat-caption">Currently being reviewed</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon purple">◌</div>
-          <div>
-            <p className="stat-label">Pending</p>
-            <h2>{isLoading ? "..." : pendingCount}</h2>
-            <span className="stat-caption">Awaiting action</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="dashboard-panels">
-        <div className="panel onboarding-panel">
-          <div className="panel-heading">
+  if (!token) {
+    return (
+      <div className="gate">
+        <aside className="gate-brand">
+          <div className="brand">
+            <span className="mark">E</span>
             <div>
-              <h3>Onboarding Overview</h3>
-              <p>Monitor your client onboarding workflow.</p>
-            </div>
-            <span className="panel-tag">Live database</span>
-          </div>
-
-          <div className="overview-content">
-            <div className="overview-item">
-              <span className="overview-dot blue-dot"></span>
-              <div>
-                <strong>
-                  {isLoading ? "..." : clients.length} Applications
-                </strong>
-                <p>Total applications received</p>
-              </div>
-            </div>
-
-            <div className="overview-item">
-              <span className="overview-dot green-dot"></span>
-              <div>
-                <strong>{approvedCount} Approved</strong>
-                <p>Completed onboarding applications</p>
-              </div>
-            </div>
-
-            <div className="overview-item">
-              <span className="overview-dot orange-dot"></span>
-              <div>
-                <strong>{reviewCount} Under Review</strong>
-                <p>Applications requiring assessment</p>
-              </div>
-            </div>
-
-            <div className="overview-item">
-              <span className="overview-dot purple-dot"></span>
-              <div>
-                <strong>{pendingCount} Pending</strong>
-                <p>Applications awaiting processing</p>
-              </div>
+              <strong>Enterprise Connect</strong>
+              <small>Employee portal</small>
             </div>
           </div>
-
-          {apiError && (
-            <p className="empty-table">{apiError}</p>
-          )}
-        </div>
-
-        <div className="panel quick-actions-panel">
-          <div className="panel-heading">
-            <div>
-              <h3>Quick Actions</h3>
-              <p>Access frequently used functions.</p>
-            </div>
-          </div>
-
-          <button
-            className="quick-action"
-            onClick={() => handleNavigation("Client Onboarding")}
-          >
-            <span className="quick-action-icon">＋</span>
-            <span>
-              <strong>New Client Onboarding</strong>
-              <small>Register a new corporate client</small>
-            </span>
-            <span className="action-arrow">›</span>
-          </button>
-
-          <button
-            className="quick-action"
-            onClick={() => handleNavigation("Risk Assessment")}
-          >
-            <span className="quick-action-icon">△</span>
-            <span>
-              <strong>Risk Assessment</strong>
-              <small>Evaluate client risk indicators</small>
-            </span>
-            <span className="action-arrow">›</span>
-          </button>
-
-          <button
-            className="quick-action"
-            onClick={() => handleNavigation("Client Directory")}
-          >
-            <span className="quick-action-icon">▤</span>
-            <span>
-              <strong>View Client Directory</strong>
-              <small>Explore registered clients</small>
-            </span>
-            <span className="action-arrow">›</span>
-          </button>
-        </div>
-      </section>
-
-      <section className="panel applications-panel">
-        <div className="panel-heading applications-heading">
           <div>
-            <h3>Recent Client Applications</h3>
-            <p>View and search your latest client applications.</p>
+            <h1>Review the client book</h1>
+            <p>Open an application, read the documents, and record the demonstration risk assessment.</p>
           </div>
-
-          <button
-            className="secondary-button"
-            onClick={() => handleNavigation("Client Directory")}
-          >
-            View All Clients →
-          </button>
-        </div>
-
-        <div className="table-toolbar">
-          <input
-            type="text"
-            placeholder="Search by client name, ID, country or status..."
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
-        </div>
-
-        {renderClientTable()}
-      </section>
-    </>
-  );
-
-  // Placeholder for modules not yet developed
-  const renderPlaceholder = () => (
-    <section className="placeholder-page">
-      <div className="placeholder-icon">▤</div>
-      <h2>{activePage}</h2>
-
-      <p>
-        This module is part of the Enterprise Client Onboarding
-        project roadmap.
-      </p>
-
-      <span className="panel-tag">Coming soon</span>
-
-      <div className="placeholder-note">
-        <strong>Planned functionality</strong>
-        <p>
-          This section will be developed as the project expands,
-          with dedicated workflows, data management and validation.
-        </p>
+        </aside>
+        <main className="gate-panel">
+          <form className="auth-card" onSubmit={async (event: FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            setError("");
+            try {
+              const result = await api<{ access_token: string; user: { portal_role: string } }>("/auth/login", {
+                method: "POST",
+                body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
+              });
+              if (result.user.portal_role !== "employee") {
+                setError("This sign-in is for the employee portal.");
+                return;
+              }
+              setToken(result.access_token);
+              setTokenState(result.access_token);
+            } catch (reason) {
+              setError(reason instanceof Error ? reason.message : "Sign in failed.");
+            }
+          }}>
+            <h2>Sign in</h2>
+            <p className="lede">Employee access only. Synthetic demonstration data.</p>
+            <label>Email<input name="email" type="email" required /></label>
+            <label>Password<input name="password" type="password" required minLength={8} /></label>
+            <button className="primary-button" type="submit">Sign in</button>
+            {error && <p className="form-message">{error}</p>}
+          </form>
+        </main>
       </div>
-
-      <button
-        className="primary-button"
-        onClick={() => handleNavigation("Dashboard")}
-      >
-        Return to Dashboard
-      </button>
-    </section>
-  );
-
-  // Page navigation
-  const renderPage = () => {
-    switch (activePage) {
-      case "Dashboard":
-        return renderDashboard();
-
-      case "Client Onboarding":
-        return <ClientOnboarding />;
-
-      case "Risk Assessment":
-        return <RiskAssessment />;
-
-      case "Client Directory":
-        return (
-          <section className="panel applications-panel">
-            <div className="panel-heading">
-              <div>
-                <h3>Client Directory</h3>
-                <p>Search and review registered clients.</p>
-              </div>
-
-              <span className="panel-tag">
-                Live database
-              </span>
-            </div>
-
-            <div className="table-toolbar">
-              <input
-                type="text"
-                placeholder="Search clients..."
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-              />
-            </div>
-
-            {renderClientTable()}
-          </section>
-        );
-
-      default:
-        return renderPlaceholder();
-    }
-  };
+    );
+  }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell employee">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">EC</div>
-          <div className="brand-text">
-            <h2>Enterprise</h2>
-            <span>CLIENT ONBOARDING</span>
+          <span className="mark">E</span>
+          <div className="brand-name">
+            <strong>Enterprise Connect</strong>
+            <small>Employee portal</small>
           </div>
         </div>
-
-        <div className="sidebar-section-label">WORKSPACE</div>
-
-        <nav className="sidebar-nav">
+        <nav className="side-navigation">
+          <div className="side-label">Workspace</div>
           {navigation.map((item) => (
-            <button
-              key={item.name}
-              className={`nav-item ${
-                activePage === item.name ? "active" : ""
-              }`}
-              onClick={() => handleNavigation(item.name)}
-            >
-              <span className="nav-icon">{item.icon}</span>
-              <span>{item.name}</span>
-
-              {activePage === item.name && (
-                <span className="nav-active-indicator"></span>
-              )}
+            <button key={item} className={`nav-item ${page === item ? "active" : ""}`} onClick={() => setPage(item)}>
+              <span>{item}</span>
             </button>
           ))}
+          {selected && (
+            <button className={`nav-item ${page === "Review" ? "active" : ""}`} onClick={() => setPage("Review")}>
+              <span>Open application</span>
+            </button>
+          )}
         </nav>
-
-        <div className="sidebar-security">
-          <div className="security-icon">◆</div>
+        <div className="side-user">
+          <span className="avatar">DR</span>
           <div>
-            <strong>Secure Workspace</strong>
-            <span>Independent portfolio demo</span>
+            <strong>Demo reviewer</strong>
+            <button className="btn-text" onClick={async () => {
+              await api("/auth/logout", { method: "POST" }).catch(() => undefined);
+              setToken(null);
+              setTokenState(null);
+            }}>Sign out</button>
           </div>
         </div>
       </aside>
-
       <div className="main-area">
         <header className="topbar">
-          <div className="breadcrumb">
-            <span>Workspace</span>
-            <span className="breadcrumb-divider">/</span>
-            <strong>{activePage}</strong>
-          </div>
-
-          <div className="topbar-right">
-            <span className="environment-label">
-              <span className="environment-dot"></span>
-              DEMO ENVIRONMENT
-            </span>
-
-            <div className="user-profile">
-              <div className="user-avatar">AD</div>
-              <div className="user-details">
-                <strong>Administrator</strong>
-                <span>Demo User</span>
-              </div>
-            </div>
+          <div>
+            <span className="crumb">Review desk</span>
+            <strong>{page === "Review" ? "Open application" : page}</strong>
           </div>
         </header>
-
         <main className="dashboard-content">
-          {renderPage()}
+          {error && <p className="form-message">{error}</p>}
+          {page === "Dashboard" && summary && (
+            <>
+              <div className="page-head">
+                <h1>Overview</h1>
+                <p>The synthetic client book currently in review.</p>
+              </div>
+              <section className="stats-grid">
+                <Card label="Applications" value={summary.total} />
+                <Card label="Not submitted" value={summary.pending} />
+                <Card label="Submitted" value={summary.submitted} />
+                <Card label="Under review" value={summary.under_review} />
+                <Card label="Information required" value={summary.information_required} />
+                <Card label="Approved" value={summary.approved} />
+                <Card label="Rejected" value={summary.rejected} />
+              </section>
+              <section className="panel">
+                <div className="panel-heading"><h3>Recent activity</h3></div>
+                {summary.activity.map((item) => (
+                  <p key={item.id}><strong>{item.event.replaceAll("_", " ")}</strong> {item.detail}</p>
+                ))}
+                <div className="bar-chart">
+                  {(() => {
+                    const bars = [
+                      ["Pending", summary.pending],
+                      ["Submitted", summary.submitted],
+                      ["Review", summary.under_review],
+                      ["Approved", summary.approved],
+                    ];
+                    const max = Math.max(1, ...bars.map(([, value]) => Number(value)));
+                    return bars.map(([label, value]) => (
+                      <div key={String(label)}>
+                        <span style={{ height: `${Math.max(4, (Number(value) / max) * 72)}px` }} />
+                        <small>{label}</small>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </section>
+            </>
+          )}
+          {page === "Applications" && (
+            <section className="panel">
+              <div className="page-head">
+                <h1>Applications</h1>
+                <p>{rows.length} records in the client book.</p>
+              </div>
+              <div className="filters">
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search organisation, reference, or email" />
+                <select value={status} onChange={(event) => setStatus(event.target.value)}>
+                  <option value="">All statuses</option>
+                  {["Pending", "Draft", "Submitted", "Under Review", "Information Required", "Resubmitted", "Approved", "Rejected"].map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+              <table className="client-table">
+                <thead>
+                  <tr>
+                    <th>Reference</th><th>Organisation</th><th>Country</th><th>Status</th><th>Risk</th><th>Open items</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id} onClick={() => openApplication(row.id)}>
+                      <td>{row.reference}</td>
+                      <td>{row.legal_name}</td>
+                      <td>{row.country}</td>
+                      <td>{row.status}</td>
+                      <td>{row.risk}</td>
+                      <td>{row.outstanding}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+          {page === "Review" && detail && (
+            <Review
+              detail={detail}
+              onChanged={async () => {
+                await loadLists();
+                setDetail(await api<Detail>(`/employee/applications/${detail.application.id}`));
+              }}
+            />
+          )}
         </main>
-
-        <footer className="app-footer">
-          Enterprise Client Onboarding · Independent portfolio project
-          <span> | Synthetic demonstration data only</span>
-        </footer>
       </div>
     </div>
+  );
+}
+
+function Card({ label, value }: { label: string; value: number }) {
+  return (
+    <article className="stat-card">
+      <p className="stat-label">{label}</p>
+      <h2>{value}</h2>
+    </article>
+  );
+}
+
+function Review({ detail, onChanged }: { detail: Detail; onChanged: () => Promise<void> }) {
+  const organisation = detail.organisation;
+  const [tab, setTab] = useState("Profile");
+  const [message, setMessage] = useState("");
+  const tabs = ["Profile", "Questionnaire", "Documents", "People", "Requests", "Risk", "History"];
+
+  return (
+    <section className="review">
+      <div className="review-head">
+        <div>
+          <p className="eyebrow">{detail.application.reference}</p>
+          <h1>{organisation.legal_name}</h1>
+        </div>
+        <form onSubmit={async (event) => {
+          event.preventDefault();
+          const status = String(new FormData(event.currentTarget).get("status"));
+          await api(`/employee/applications/${detail.application.id}/status`, { method: "POST", body: JSON.stringify({ status }) });
+          await onChanged();
+        }}>
+          <select name="status" defaultValue={detail.application.status}>
+            {["Pending", "Draft", "Submitted", "Under Review", "Information Required", "Resubmitted", "Approved", "Rejected"].map((item) => <option key={item}>{item}</option>)}
+          </select>
+          <button className="primary-button" type="submit">Update status</button>
+        </form>
+      </div>
+      <div className="tabs">
+        {tabs.map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}
+      </div>
+      {tab === "Profile" && (
+        <div className="panel detail-grid">
+          {Object.entries(organisation).map(([key, value]) => (
+            <p key={key}><span>{key.replaceAll("_", " ")}</span><strong>{value || "—"}</strong></p>
+          ))}
+        </div>
+      )}
+      {tab === "Questionnaire" && (
+        <div className="panel">
+          <p>Submitted answers are read-only. Status: {detail.questionnaire.response_status}. English prompts are shown for review.</p>
+          {detail.questionnaire.sections.map((section) => (
+            <section key={section.title}>
+              <h3>{section.title}</h3>
+              {section.questions.map((question) => (
+                <p key={question.prompt}><span>{question.prompt}</span><strong>{question.answer || "No answer"}</strong></p>
+              ))}
+            </section>
+          ))}
+        </div>
+      )}
+      {tab === "Documents" && (
+        <div className="panel">
+          {detail.documents.map((document) => (
+            <article key={document.id} className="file-row">
+              <div>
+                <strong>{document.description || document.versions[0]?.filename}</strong>
+                <small>{document.status}{document.feedback ? ` · ${document.feedback}` : ""}</small>
+              </div>
+              {document.versions[0] && (
+                <div className="row-actions">
+                  <button type="button" onClick={() => openDocument(document.versions[0].id)}>Preview</button>
+                  <form onSubmit={async (event) => {
+                    event.preventDefault();
+                    const form = new FormData(event.currentTarget);
+                    await api(`/employee/documents/${document.versions[0].id}/review`, {
+                      method: "POST",
+                      body: JSON.stringify({ outcome: form.get("outcome"), comment: form.get("comment") }),
+                    });
+                    await onChanged();
+                  }}>
+                    <select name="outcome">
+                      <option>Verified</option>
+                      <option>Rejected</option>
+                      <option>Replacement Requested</option>
+                    </select>
+                    <input name="comment" placeholder="Comment" />
+                    <button className="primary-button" type="submit">Save review</button>
+                  </form>
+                </div>
+              )}
+            </article>
+          ))}
+          {detail.documents.length === 0 && <p>No documents uploaded.</p>}
+        </div>
+      )}
+      {tab === "People" && (
+        <div className="panel">
+          {detail.parties.map((person) => <p key={person.full_name}><strong>{person.full_name}</strong> {person.party_type} {person.ownership_percentage || ""}</p>)}
+          {detail.parties.length === 0 && <p>No directors, owners, or controllers recorded.</p>}
+        </div>
+      )}
+      {tab === "Requests" && (
+        <div className="panel">
+          <form onSubmit={async (event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            await api(`/employee/applications/${detail.application.id}/requests`, {
+              method: "POST",
+              body: JSON.stringify({
+                description: form.get("description"),
+                related_type: form.get("related_type"),
+                due_date: form.get("due_date") || null,
+              }),
+            });
+            event.currentTarget.reset();
+            await onChanged();
+          }}>
+            <textarea name="description" required placeholder="What should the customer provide?" />
+            <select name="related_type">
+              <option value="document">Document</option>
+              <option value="questionnaire">Questionnaire</option>
+              <option value="profile">Profile</option>
+            </select>
+            <input type="date" name="due_date" />
+            <button className="primary-button" type="submit">Send request</button>
+          </form>
+          {detail.requests.map((request) => (
+            <article key={request.id}>
+              <strong>{request.reference}</strong> {request.status}
+              <p>{request.description}</p>
+              {request.status !== "Closed" && <button onClick={async () => { await api(`/employee/requests/${request.id}/close`, { method: "POST" }); await onChanged(); }}>Close</button>}
+            </article>
+          ))}
+        </div>
+      )}
+      {tab === "Risk" && (
+        <form className="panel" onSubmit={async (event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
+          const result = await api<{ score: number; level: string }>(`/employee/applications/${detail.application.id}/risk`, {
+            method: "POST",
+            body: JSON.stringify(Object.fromEntries(form.entries())),
+          });
+          setMessage(`Demonstration result: ${result.score}, ${result.level}. This is not an approved risk methodology.`);
+          await onChanged();
+        }}>
+          <p>Demonstration rule only. It does not connect to a sanctions or screening service.</p>
+          {["country_risk", "business_risk", "ownership_risk"].map((name) => (
+            <label key={name}>{name.replaceAll("_", " ")}
+              <select name={name}><option>Low</option><option>Medium</option><option>High</option></select>
+            </label>
+          ))}
+          <label>PEP<select name="pep_status"><option>No</option><option>Yes</option></select></label>
+          <label>Sanctions indicator<select name="sanctions_status"><option>No</option><option>Yes</option></select></label>
+          <textarea name="notes" placeholder="Review note" />
+          <button className="primary-button" type="submit">Save assessment</button>
+          {detail.risk[0] && <p>Latest: {detail.risk[0].score} / {detail.risk[0].level} ({detail.risk[0].methodology})</p>}
+          {message && <p>{message}</p>}
+        </form>
+      )}
+      {tab === "History" && (
+        <div className="panel">
+          {detail.audit.map((item) => <p key={item.id}><strong>{item.event.replaceAll("_", " ")}</strong> {item.detail}</p>)}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -112,11 +112,20 @@ Create and activate a Python virtual environment, then install the required pack
 
 Configure the database connection through environment variables in a local `.env` file.
 
+Apply the database migration from the project root. This creates `users`, `organisations`, and `onboarding_applications`, and copies each existing client into an organisation and an application. The `clients` table is left in place.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m alembic -c backend/alembic.ini upgrade head
+```
+
 Start the FastAPI server:
 
 ```powershell
-python -m uvicorn main:app --reload --app-dir backend --reload-dir backend --port 8000
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --reload --port 8000
 ```
+
+Run that command from the project root. The API imports the `backend` package, so it needs to be started from this folder.
 
 Open API documentation:
 
@@ -134,6 +143,8 @@ Open:
 
 http://localhost:5174
 
+The customer portal calls the hosted API unless `customer-portal/.env` sets `VITE_API_URL`. Use `http://127.0.0.1:8000` when you want registration to hit the local API. Copy `customer-portal/.env.example` to `customer-portal/.env` and change that value. Restart the dev server after changing it.
+
 ### Employee Portal
 
 ```powershell
@@ -145,6 +156,8 @@ npm run dev -- --host 127.0.0.1 --port 5173
 Open:
 
 http://localhost:5173
+
+The employee portal calls `http://127.0.0.1:8000` unless `frontend/.env` sets `VITE_API_URL`. Copy `frontend/.env.example` when you need a different API address, then restart the dev server.
 
 ## 8. Security Considerations
 
@@ -169,7 +182,7 @@ http://localhost:5173
 
 ## 10. Project Status
 
-**Current milestone:** Initial working prototype with connected customer portal, employee portal, FastAPI backend, and PostgreSQL database.
+**Current milestone:** Registration and the client list remain in place. Each client also has an organisation profile and an onboarding application reference (`APP-00001`). Login is not implemented yet. `GET /applications` is open in the same way as `GET /clients`.
 
 **Project type:** Independent software development portfolio project.
 

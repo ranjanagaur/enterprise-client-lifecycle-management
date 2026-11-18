@@ -19,8 +19,9 @@ html {
 
 body {
   min-height: 100vh;
-  font-family: 'Inter', 'Segoe UI', sans-serif;
-  background: #f3f6f9;
+  font-family: Inter, "Segoe UI", sans-serif;
+  background: #efece4;
+  text-align: start;
 }
 
 #root {
