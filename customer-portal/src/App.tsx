@@ -4,7 +4,7 @@ import "./App.css";
 
 type AuthMode = "home" | "login" | "register" | "forgot";
 
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://enterprise-clm-api.onrender.com";
 
 function App() {
   const [mode, setMode] = useState<AuthMode>("home");
