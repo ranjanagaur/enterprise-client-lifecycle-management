@@ -10,14 +10,23 @@ from backend.database import SessionLocal, engine, Base
 from backend import models, schemas
 
 
-# Create database tables when the application starts
+# --------------------------------------------------
+# DATABASE INITIALISATION
+# --------------------------------------------------
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Create database tables when the application starts
     Base.metadata.create_all(bind=engine)
+
     print("Database tables created successfully!")
 
     yield
 
+
+# --------------------------------------------------
+# FASTAPI APPLICATION
+# --------------------------------------------------
 
 app = FastAPI(
     title="Enterprise Client Lifecycle Management API",
@@ -27,14 +36,23 @@ app = FastAPI(
 )
 
 
-# Configure CORS
+# --------------------------------------------------
+# CORS CONFIGURATION
+# --------------------------------------------------
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        # Local Customer Portal
         "http://localhost:5174",
         "http://127.0.0.1:5174",
+
+        # Local Employee Portal
         "http://localhost:5173",
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+
+        # Deployed Customer Portal on Vercel
+        "https://enterprise-clm-customer-portal-n3o3cb6vx.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -42,16 +60,23 @@ app.add_middleware(
 )
 
 
-# Database session management
+# --------------------------------------------------
+# DATABASE SESSION
+# --------------------------------------------------
+
 def get_db():
     db = SessionLocal()
+
     try:
         yield db
     finally:
         db.close()
 
 
-# Home endpoint
+# --------------------------------------------------
+# HOME ENDPOINT
+# --------------------------------------------------
+
 @app.get("/")
 def home():
     return {
@@ -60,40 +85,59 @@ def home():
     }
 
 
-# Health check endpoint
+# --------------------------------------------------
+# HEALTH CHECK ENDPOINT
+# --------------------------------------------------
+
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "message": "Enterprise CLM API is operational"
+    }
 
 
-# Register a new client
+# --------------------------------------------------
+# REGISTER NEW CLIENT
+# --------------------------------------------------
+
 @app.post("/clients/register", response_model=schemas.ClientResponse)
 def register_client(
     client: schemas.ClientCreate,
     db: Session = Depends(get_db)
 ):
-    new_client = models.Client(**client.model_dump())
-
-    db.add(new_client)
+    new_client = models.Client(
+        company_name=client.company_name,
+        registration_number=client.registration_number,
+        country=client.country,
+        contact_name=client.contact_name,
+        business_email=client.business_email,
+        contact_number=client.contact_number,
+        onboarding_status="Pending"
+    )
 
     try:
+        db.add(new_client)
         db.commit()
         db.refresh(new_client)
+
         return new_client
 
     except IntegrityError:
         db.rollback()
+
         raise HTTPException(
             status_code=409,
-            detail="This business email or registration number is already registered."
+            detail="This email or registration number is already registered."
         )
 
 
-# Retrieve all registered clients
+# --------------------------------------------------
+# GET ALL REGISTERED CLIENTS
+# --------------------------------------------------
+
 @app.get("/clients", response_model=list[schemas.ClientResponse])
 def get_clients(db: Session = Depends(get_db)):
-    clients = db.query(models.Client).order_by(
-        models.Client.id.asc()
-    ).all()
+    clients = db.query(models.Client).all()
 
     return clients
