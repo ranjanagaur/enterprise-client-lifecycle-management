@@ -1,25 +1,41 @@
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from backend.database import SessionLocal
+from backend.database import SessionLocal, engine, Base
 from backend import models, schemas
+
+
+# Create database tables when the application starts
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    print("Database tables created successfully!")
+
+    yield
+
 
 app = FastAPI(
     title="Enterprise Client Lifecycle Management API",
     description="Shared backend for customer and employee portals",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
+
+
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173"
-],
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,6 +51,7 @@ def get_db():
         db.close()
 
 
+# Home endpoint
 @app.get("/")
 def home():
     return {
@@ -43,6 +60,7 @@ def home():
     }
 
 
+# Health check endpoint
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
@@ -69,6 +87,7 @@ def register_client(
             status_code=409,
             detail="This business email or registration number is already registered."
         )
+
 
 # Retrieve all registered clients
 @app.get("/clients", response_model=list[schemas.ClientResponse])
