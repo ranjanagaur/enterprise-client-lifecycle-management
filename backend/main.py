@@ -67,9 +67,12 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:5173",
 
-        # Deployed Customer Portal on Vercel
+        # Deployed customer and employee portals on Vercel
+        "https://enterprise-clm-customer-portal.vercel.app",
         "https://enterprise-clm-customer-portal-n3o3cb6vx.vercel.app",
+        "https://enterprise-clm-employee-portal.vercel.app",
     ],
+    allow_origin_regex=r"https://enterprise-clm-[a-z0-9-]+\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
