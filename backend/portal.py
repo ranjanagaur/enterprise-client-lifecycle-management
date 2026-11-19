@@ -403,15 +403,16 @@ def _questionnaire_payload(db: Session, application: models.OnboardingApplicatio
             )
             .one_or_none()
         )
-        if title_row is None:
-            title_row = (
-                db.query(models.SectionTranslation)
-                .filter(
-                    models.SectionTranslation.section_id == section.id,
-                    models.SectionTranslation.language_code == "en",
-                )
-                .one()
+        english_title = (
+            db.query(models.SectionTranslation)
+            .filter(
+                models.SectionTranslation.section_id == section.id,
+                models.SectionTranslation.language_code == "en",
             )
+            .one()
+        )
+        if title_row is None:
+            title_row = english_title
         questions = (
             db.query(models.Question)
             .filter(models.Question.section_id == section.id)
@@ -461,16 +462,22 @@ def _questionnaire_payload(db: Session, application: models.OnboardingApplicatio
                     )
                     .one_or_none()
                 )
-                if label is None:
-                    label = (
-                        db.query(models.AnswerOptionTranslation)
-                        .filter(
-                            models.AnswerOptionTranslation.option_id == option.id,
-                            models.AnswerOptionTranslation.language_code == "en",
-                        )
-                        .one()
+                english_label = (
+                    db.query(models.AnswerOptionTranslation)
+                    .filter(
+                        models.AnswerOptionTranslation.option_id == option.id,
+                        models.AnswerOptionTranslation.language_code == "en",
                     )
-                options.append({"id": option.id, "code": option.code, "label": label.label})
+                    .one()
+                )
+                if label is None:
+                    label = english_label
+                options.append({
+                    "id": option.id,
+                    "code": option.code,
+                    "label": label.label,
+                    "english_label": english_label.label,
+                })
             value = answers.get(question.id, "")
             if question.is_required:
                 required_total += 1
@@ -492,6 +499,7 @@ def _questionnaire_payload(db: Session, application: models.OnboardingApplicatio
             "code": section.code,
             "position": section.position,
             "title": title_row.title,
+            "english_title": english_title.title,
             "approval_status": title_row.approval_status,
             "complete": required_total == 0 or required_done == required_total,
             "questions": question_payload,

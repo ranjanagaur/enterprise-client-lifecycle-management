@@ -435,7 +435,14 @@ input:focus, select:focus, textarea:focus {
   color: var(--ink);
   text-align: start;
 }
-.section-index button span { grid-row: span 2; font-family: var(--serif); font-weight: 500; color: var(--gold); font-size: 16px; }
+.section-index button > span:first-child { grid-row: span 2; font-family: var(--serif); font-weight: 500; color: var(--gold); font-size: 16px; }
+.phrase { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; max-width: 100%; vertical-align: top; }
+.phrase-translation { font-family: var(--sans); font-size: 0.72em; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--gold); line-height: 1.25; }
+.btn .phrase, .nav-link .phrase { align-items: inherit; }
+.btn .phrase-translation { color: inherit; opacity: 0.72; }
+.side-label .phrase-translation { color: var(--gold-soft); }
+.kicker .phrase-translation, .field-label .phrase-translation { color: var(--gold); }
+.form-message { white-space: pre-line; }
 .section-index button small { color: var(--muted); font-size: 12px; }
 .section-index button.active { border-inline-start-color: var(--gold); background: transparent; }
 .question { margin: 0 0 20px; text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 500; color: var(--navy); white-space: normal; }

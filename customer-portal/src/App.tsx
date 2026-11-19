@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import "./App.css";
 import { api, getToken, setToken } from "./api";
-import { actionText, isRtl, languages, requirementText, statusText, text, type CopyKey } from "./i18n";
+import { isRtl, languages, statusText, text, type CopyKey } from "./i18n";
+import { ActionPhrase, inlinePair, lines, Pair, Phrase, RequirementPhrase, StatusPhrase } from "./Phrase";
 
 type View =
   | "dashboard"
@@ -46,18 +47,19 @@ type Question = {
   type: string;
   required: boolean;
   prompt: string;
-  options: { code: string; label: string }[];
+  english_prompt?: string;
+  options: { code: string; label: string; english_label?: string }[];
   answer: string;
 };
 
-type Questionnaire = {
+type QuestionnaireData = {
   notice: string;
   translation_status: string;
   response_status: string;
   editable: boolean;
   sections_complete: number;
   sections_total: number;
-  sections: { id: number; title: string; complete: boolean; questions: Question[] }[];
+  sections: { id: number; title: string; english_title?: string; complete: boolean; questions: Question[] }[];
 };
 
 const groups: { key: CopyKey; items: { id: View; key: CopyKey }[] }[] = [
@@ -115,7 +117,7 @@ function App() {
       setToken(result.access_token);
       setTokenState(result.access_token);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : text(language, "signInFailed"));
+      setMessage(error instanceof Error ? error.message : lines(language, "signInFailed"));
     }
   };
 
@@ -124,7 +126,7 @@ function App() {
     const form = new FormData(event.currentTarget);
     const password = String(form.get("password") || "");
     if (password !== String(form.get("confirm_password") || "")) {
-      setMessage(text(language, "passwordsMismatch"));
+      setMessage(lines(language, "passwordsMismatch"));
       return;
     }
     setMessage("");
@@ -151,12 +153,12 @@ function App() {
       setTokenState(result.access_token);
       setMessage(`Organisation registered. Reference will appear on the overview. Client ${created.id}.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : text(language, "registrationFailed"));
+      setMessage(error instanceof Error ? error.message : lines(language, "registrationFailed"));
     }
   };
 
   if (token && !workspace) {
-    return <main className="gate-panel"><p>{text(language, "opening")}</p></main>;
+    return <main className="gate-panel"><p><Phrase language={language} k="opening" /></p></main>;
   }
 
   if (!token || !workspace) {
@@ -166,29 +168,29 @@ function App() {
           <div className="brand">
             <span className="mark">E</span>
             <div>
-              <strong>{text(language, "brand")}</strong>
-              <small>{text(language, "portal")}</small>
+              <strong><Phrase language={language} k="brand" /></strong>
+              <small><Phrase language={language} k="portal" /></small>
             </div>
           </div>
           <div>
-            <h1>{text(language, "headline")}</h1>
-            <p>{text(language, "gateLead")}</p>
+            <h1><Phrase language={language} k="headline" /></h1>
+            <p><Phrase language={language} k="gateLead" /></p>
           </div>
           <ol className="steps">
-            <li><span>1</span><div><strong>{text(language, "stepAccount")}</strong><small>{text(language, "stepAccountHint")}</small></div></li>
-            <li><span>2</span><div><strong>{text(language, "stepQuestionnaire")}</strong><small>{text(language, "stepQuestionnaireHint")}</small></div></li>
-            <li><span>3</span><div><strong>{text(language, "stepDocuments")}</strong><small>{text(language, "stepDocumentsHint")}</small></div></li>
-            <li><span>4</span><div><strong>{text(language, "stepReview")}</strong><small>{text(language, "stepReviewHint")}</small></div></li>
+            <li><span>1</span><div><strong><Phrase language={language} k="stepAccount" /></strong><small><Phrase language={language} k="stepAccountHint" /></small></div></li>
+            <li><span>2</span><div><strong><Phrase language={language} k="stepQuestionnaire" /></strong><small><Phrase language={language} k="stepQuestionnaireHint" /></small></div></li>
+            <li><span>3</span><div><strong><Phrase language={language} k="stepDocuments" /></strong><small><Phrase language={language} k="stepDocumentsHint" /></small></div></li>
+            <li><span>4</span><div><strong><Phrase language={language} k="stepReview" /></strong><small><Phrase language={language} k="stepReviewHint" /></small></div></li>
           </ol>
         </aside>
         <main className="gate-panel">
           {mode === "home" ? (
             <section className="auth-card">
-              <h2>{text(language, "startApplication")}</h2>
-              <p className="lede">{text(language, "demoNote")}</p>
+              <h2><Phrase language={language} k="startApplication" /></h2>
+              <p className="lede"><Phrase language={language} k="demoNote" /></p>
               <div className="auth-actions">
-                <button className="btn" onClick={() => { setMode("register"); setMessage(""); }}>{text(language, "register")}</button>
-                <button className="btn btn-ghost" onClick={() => { setMode("login"); setMessage(""); }}>{text(language, "signIn")}</button>
+                <button className="btn" onClick={() => { setMode("register"); setMessage(""); }}><Phrase language={language} k="register" /></button>
+                <button className="btn btn-ghost" onClick={() => { setMode("login"); setMessage(""); }}><Phrase language={language} k="signIn" /></button>
               </div>
             </section>
           ) : (
@@ -210,31 +212,31 @@ function App() {
               });
               setMessage(`${result.message}${result.demonstration_reset_code ? ` Demonstration code: ${result.demonstration_reset_code}` : ""}`);
             }}>
-              <button type="button" className="btn-text" onClick={() => setMode("home")}>{text(language, "back")}</button>
-              <h2>{mode === "login" ? text(language, "signIn") : mode === "register" ? text(language, "registerTitle") : text(language, "resetPassword")}</h2>
+              <button type="button" className="btn-text" onClick={() => setMode("home")}><Phrase language={language} k="back" /></button>
+              <h2><Phrase language={language} k={mode === "login" ? "signIn" : mode === "register" ? "registerTitle" : "resetPassword"} /></h2>
               {mode === "register" && (
                 <>
-                  <label>{text(language, "legalName")}<input name="company_name" required minLength={2} /></label>
-                  <label>{text(language, "tradingName")}<input name="trading_name" /></label>
-                  <label>{text(language, "registrationNumber")}<input name="registration_number" /></label>
-                  <label>{text(language, "countryOfIncorporation")}<input name="country" required /></label>
-                  <label>{text(language, "contactName")}<input name="contact_name" required /></label>
-                  <label>{text(language, "designation")}<input name="designation" /></label>
-                  <label>{text(language, "contactNumber")}<input name="contact_number" required minLength={7} /></label>
+                  <label><Phrase language={language} k="legalName" /><input name="company_name" required minLength={2} /></label>
+                  <label><Phrase language={language} k="tradingName" /><input name="trading_name" /></label>
+                  <label><Phrase language={language} k="registrationNumber" /><input name="registration_number" /></label>
+                  <label><Phrase language={language} k="countryOfIncorporation" /><input name="country" required /></label>
+                  <label><Phrase language={language} k="contactName" /><input name="contact_name" required /></label>
+                  <label><Phrase language={language} k="designation" /><input name="designation" /></label>
+                  <label><Phrase language={language} k="contactNumber" /><input name="contact_number" required minLength={7} /></label>
                 </>
               )}
-              {mode !== "reset" && <label>{text(language, "businessEmail")}<input name={mode === "register" ? "business_email" : "email"} type="email" required /></label>}
-              {mode === "reset" && <label>{text(language, "businessEmail")}<input name="email" type="email" required /></label>}
-              {mode !== "reset" && <label>{text(language, "password")}<input name="password" type="password" required minLength={8} /></label>}
-              {mode === "register" && <label>{text(language, "confirmPassword")}<input name="confirm_password" type="password" required minLength={8} /></label>}
+              {mode !== "reset" && <label><Phrase language={language} k="businessEmail" /><input name={mode === "register" ? "business_email" : "email"} type="email" required /></label>}
+              {mode === "reset" && <label><Phrase language={language} k="businessEmail" /><input name="email" type="email" required /></label>}
+              {mode !== "reset" && <label><Phrase language={language} k="password" /><input name="password" type="password" required minLength={8} /></label>}
+              {mode === "register" && <label><Phrase language={language} k="confirmPassword" /><input name="confirm_password" type="password" required minLength={8} /></label>}
               {mode === "reset" && (
                 <>
-                  <label>{text(language, "resetCode")}<input name="token" /></label>
-                  <label>{text(language, "newPassword")}<input name="new_password" type="password" minLength={8} /></label>
+                  <label><Phrase language={language} k="resetCode" /><input name="token" /></label>
+                  <label><Phrase language={language} k="newPassword" /><input name="new_password" type="password" minLength={8} /></label>
                 </>
               )}
-              <button className="btn" type="submit">{mode === "login" ? text(language, "signIn") : mode === "register" ? text(language, "createAccount") : text(language, "continue")}</button>
-              {mode === "login" && <button type="button" className="btn-text" onClick={() => setMode("reset")}>{text(language, "forgotPassword")}</button>}
+              <button className="btn" type="submit"><Phrase language={language} k={mode === "login" ? "signIn" : mode === "register" ? "createAccount" : "continue"} /></button>
+              {mode === "login" && <button type="button" className="btn-text" onClick={() => setMode("reset")}><Phrase language={language} k="forgotPassword" /></button>}
               {message && <p className="form-message">{message}</p>}
             </form>
           )}
@@ -253,17 +255,17 @@ function App() {
         <div className="brand">
           <span className="mark">E</span>
           <div>
-            <strong>{text(language, "brand")}</strong>
-            <small>{text(language, "portal")}</small>
+            <strong><Phrase language={language} k="brand" /></strong>
+            <small><Phrase language={language} k="portal" /></small>
           </div>
         </div>
         <div className="side-scroll">
           {groups.map((group) => (
             <div className="side-group" key={group.key}>
-              <div className="side-label">{text(language, group.key)}</div>
+              <div className="side-label"><Phrase language={language} k={group.key} /></div>
               {group.items.map((item) => (
                 <button key={item.id} className={view === item.id ? "nav-link active" : "nav-link"} onClick={() => setView(item.id)}>
-                  {text(language, item.key)}
+                  <Phrase language={language} k={item.key} />
                   {item.id === "notifications" && unread > 0 && <span className="dot">{unread}</span>}
                 </button>
               ))}
@@ -280,7 +282,7 @@ function App() {
               setToken(null);
               setTokenState(null);
               setWorkspace(null);
-            }}>{text(language, "signOut")}</button>
+            }}><Phrase language={language} k="signOut" /></button>
           </div>
         </div>
       </aside>
@@ -290,7 +292,7 @@ function App() {
           <strong>{workspace.organisation.legal_name}</strong>
         </div>
         <div className="top-actions">
-          <span className={`status ${workspace.application.status.replaceAll(" ", "-").toLowerCase()}`}>{statusText(language, workspace.application.status)}</span>
+          <span className={`status ${workspace.application.status.replaceAll(" ", "-").toLowerCase()}`}><StatusPhrase language={language} status={workspace.application.status} /></span>
           <select aria-label={text(language, "language")} value={language} onChange={async (event) => {
             const next = event.target.value;
             const user = await api<{ preferred_language: string }>("/auth/language", {
@@ -306,13 +308,13 @@ function App() {
       <main className="workspace-main">
         <div className="page-head">
           <div>
-            <h1>{text(language, pageKey)}</h1>
-            {view === "dashboard" && <p>{text(language, "welcome")}</p>}
+            <h1><Phrase language={language} k={pageKey} /></h1>
+            {view === "dashboard" && <p><Phrase language={language} k="welcome" /></p>}
           </div>
         </div>
         {view === "dashboard" && <Dashboard language={language} workspace={workspace} onOpen={setView} />}
         {view === "profile" && <Profile language={language} workspace={workspace} onSaved={loadWorkspace} />}
-        {view === "questionnaire" && <Questionnaire language={language} labels={{ save: text(language, "save"), submit: text(language, "submit") }} onChanged={loadWorkspace} />}
+        {view === "questionnaire" && <Questionnaire language={language} onChanged={loadWorkspace} />}
         {view === "company" && <Documents language={language} category="company" requirements={workspace.requirements} onChanged={loadWorkspace} />}
         {view === "other" && <Documents language={language} category="other" requirements={[]} onChanged={loadWorkspace} />}
         {view === "people" && <People language={language} unlocked={workspace.progress.people_unlocked} />}
@@ -329,50 +331,49 @@ function Dashboard({ language, workspace, onOpen }: { language: string; workspac
   const progress = workspace.progress;
   const organisation = workspace.organisation;
   const overall = Math.round((progress.profile_percent + progress.questionnaire_percent + (progress.documents_required ? (progress.documents_satisfied / progress.documents_required) * 100 : 0)) / 3);
-  const tasks: { step: string; title: string; detail: string; state: string; view: View; enabled: boolean }[] = [
-    { step: "1", title: text(language, "profileTask"), detail: text(language, "profileTaskDetail"), state: text(language, "percentComplete", { n: progress.profile_percent }), view: "profile", enabled: true },
-    { step: "1", title: text(language, "questionnaireTask"), detail: actionText(language, progress.next_action), state: text(language, "percentComplete", { n: progress.questionnaire_percent }), view: "questionnaire", enabled: true },
-    { step: "2", title: text(language, "companyTask"), detail: text(language, "companyTaskDetail"), state: text(language, "documentsOf", { done: progress.documents_satisfied, total: progress.documents_required }), view: "company", enabled: true },
-    { step: "2", title: text(language, "otherTask"), detail: text(language, "otherTaskDetail"), state: text(language, "optional"), view: "other", enabled: true },
-    { step: "2", title: text(language, "peopleTask"), detail: text(language, "peopleTaskDetail"), state: progress.people_unlocked ? text(language, "open") : text(language, "locked"), view: "people", enabled: progress.people_unlocked },
-    { step: "3", title: text(language, "requestsTask"), detail: text(language, "requestsTaskDetail"), state: progress.open_requests ? text(language, "requestsOpen", { n: progress.open_requests }) : text(language, "noneOpen"), view: "requests", enabled: true },
+  const tasks: { step: string; title: ReactNode; detail: ReactNode; state: ReactNode; view: View; enabled: boolean }[] = [
+    { step: "1", title: <Phrase language={language} k="profileTask" />, detail: <Phrase language={language} k="profileTaskDetail" />, state: <Phrase language={language} k="percentComplete" vars={{ n: progress.profile_percent }} />, view: "profile", enabled: true },
+    { step: "1", title: <Phrase language={language} k="questionnaireTask" />, detail: <ActionPhrase language={language} action={progress.next_action} />, state: <Phrase language={language} k="percentComplete" vars={{ n: progress.questionnaire_percent }} />, view: "questionnaire", enabled: true },
+    { step: "2", title: <Phrase language={language} k="companyTask" />, detail: <Phrase language={language} k="companyTaskDetail" />, state: <Phrase language={language} k="documentsOf" vars={{ done: progress.documents_satisfied, total: progress.documents_required }} />, view: "company", enabled: true },
+    { step: "2", title: <Phrase language={language} k="otherTask" />, detail: <Phrase language={language} k="otherTaskDetail" />, state: <Phrase language={language} k="optional" />, view: "other", enabled: true },
+    { step: "2", title: <Phrase language={language} k="peopleTask" />, detail: <Phrase language={language} k="peopleTaskDetail" />, state: <Phrase language={language} k={progress.people_unlocked ? "open" : "locked"} />, view: "people", enabled: progress.people_unlocked },
+    { step: "3", title: <Phrase language={language} k="requestsTask" />, detail: <Phrase language={language} k="requestsTaskDetail" />, state: progress.open_requests ? <Phrase language={language} k="requestsOpen" vars={{ n: progress.open_requests }} /> : <Phrase language={language} k="noneOpen" />, view: "requests", enabled: true },
   ];
-  const stepName = (step: string) => text(language, step === "1" ? "accountStep" : step === "2" ? "evidenceStep" : "reviewStep");
   return (
     <div className="stack">
       <section className="panel entity">
         <div className="entity-head">
           <div>
-            <div className="kicker">{text(language, "organisation")}</div>
+            <div className="kicker"><Phrase language={language} k="organisation" /></div>
             <h2>{organisation.legal_name}</h2>
           </div>
           <div>
             <div className="progress-line" aria-hidden="true"><span style={{ width: `${overall}%` }} /></div>
-            <small>{text(language, "overall", { n: overall })}</small>
+            <small><Phrase language={language} k="overall" vars={{ n: overall }} /></small>
           </div>
         </div>
         <div className="entity-grid">
-          <div><span className="field-label">{text(language, "country")}</span><div className="field-value">{organisation.country_of_incorporation}</div></div>
-          <div><span className="field-label">{text(language, "registration")}</span><div className="field-value">{organisation.registration_number || "—"}</div></div>
-          <div><span className="field-label">{text(language, "contact")}</span><div className="field-value">{organisation.contact_name}</div></div>
-          <div><span className="field-label">{text(language, "email")}</span><div className="field-value">{organisation.business_email}</div></div>
-          <div><span className="field-label">{text(language, "phone")}</span><div className="field-value">{organisation.contact_number}</div></div>
-          <div><span className="field-label">{text(language, "application")}</span><div className="field-value">{workspace.application.reference}</div></div>
+          <div><span className="field-label"><Phrase language={language} k="country" /></span><div className="field-value">{organisation.country_of_incorporation}</div></div>
+          <div><span className="field-label"><Phrase language={language} k="registration" /></span><div className="field-value">{organisation.registration_number || "—"}</div></div>
+          <div><span className="field-label"><Phrase language={language} k="contact" /></span><div className="field-value">{organisation.contact_name}</div></div>
+          <div><span className="field-label"><Phrase language={language} k="email" /></span><div className="field-value">{organisation.business_email}</div></div>
+          <div><span className="field-label"><Phrase language={language} k="phone" /></span><div className="field-value">{organisation.contact_number}</div></div>
+          <div><span className="field-label"><Phrase language={language} k="application" /></span><div className="field-value">{workspace.application.reference}</div></div>
         </div>
       </section>
       <section className="panel">
         <div className="panel-head">
-          <h2>{text(language, "onboardingTasks")}</h2>
-          <span className="kicker">{statusText(language, workspace.application.status)}</span>
+          <h2><Phrase language={language} k="onboardingTasks" /></h2>
+          <span className="kicker"><StatusPhrase language={language} status={workspace.application.status} /></span>
         </div>
         {["1", "2", "3"].map((step) => (
           <div className="step" key={step}>
-            <div className="step-title"><b>{step}</b><strong>{stepName(step)}</strong></div>
+            <div className="step-title"><b>{step}</b><strong><Phrase language={language} k={step === "1" ? "accountStep" : step === "2" ? "evidenceStep" : "reviewStep"} /></strong></div>
             {tasks.filter((task) => task.step === step).map((task) => (
               <article className="task" key={task.view}>
                 <div><strong>{task.title}</strong><small>{task.detail}</small></div>
                 <span className="status">{task.state}</span>
-                <button className="btn" disabled={!task.enabled} onClick={() => onOpen(task.view)}>{task.enabled ? text(language, "open") : text(language, "locked")}</button>
+                <button className="btn" disabled={!task.enabled} onClick={() => onOpen(task.view)}><Phrase language={language} k={task.enabled ? "open" : "locked"} /></button>
               </article>
             ))}
           </div>
@@ -400,35 +401,35 @@ function Profile({ language, workspace, onSaved }: { language: string; workspace
       });
       await onSaved();
     }}>
-      <label>{text(language, "legalName")}<input value={organisation.legal_name} readOnly /></label>
-      <label>{text(language, "tradingName")}<input name="trading_name" defaultValue={organisation.trading_name || ""} /></label>
-      <label>{text(language, "registrationNumber")}<input value={organisation.registration_number || ""} readOnly /></label>
-      <label>{text(language, "country")}<input value={organisation.country_of_incorporation} readOnly /></label>
-      <label>{text(language, "registeredAddress")}<textarea name="registered_address" defaultValue={organisation.registered_address || ""} /></label>
-      <label>{text(language, "principalPlace")}<textarea name="principal_place_of_business" defaultValue={organisation.principal_place_of_business || ""} /></label>
-      <label>{text(language, "contact")}<input value={organisation.contact_name} readOnly /></label>
-      <label>{text(language, "email")}<input value={organisation.business_email} readOnly /></label>
-      <label>{text(language, "phone")}<input name="contact_number" defaultValue={organisation.contact_number} /></label>
-      <label>{text(language, "designation")}<input name="designation" defaultValue={workspace.user.designation || ""} /></label>
-      <button className="btn" type="submit">{text(language, "saveProfile")}</button>
+      <label><Phrase language={language} k="legalName" /><input value={organisation.legal_name} readOnly /></label>
+      <label><Phrase language={language} k="tradingName" /><input name="trading_name" defaultValue={organisation.trading_name || ""} /></label>
+      <label><Phrase language={language} k="registrationNumber" /><input value={organisation.registration_number || ""} readOnly /></label>
+      <label><Phrase language={language} k="country" /><input value={organisation.country_of_incorporation} readOnly /></label>
+      <label><Phrase language={language} k="registeredAddress" /><textarea name="registered_address" defaultValue={organisation.registered_address || ""} /></label>
+      <label><Phrase language={language} k="principalPlace" /><textarea name="principal_place_of_business" defaultValue={organisation.principal_place_of_business || ""} /></label>
+      <label><Phrase language={language} k="contact" /><input value={organisation.contact_name} readOnly /></label>
+      <label><Phrase language={language} k="email" /><input value={organisation.business_email} readOnly /></label>
+      <label><Phrase language={language} k="phone" /><input name="contact_number" defaultValue={organisation.contact_number} /></label>
+      <label><Phrase language={language} k="designation" /><input name="designation" defaultValue={workspace.user.designation || ""} /></label>
+      <button className="btn" type="submit"><Phrase language={language} k="saveProfile" /></button>
     </form>
   );
 }
 
-function Questionnaire({ language, labels, onChanged }: { language: string; labels: { save: string; submit: string }; onChanged: () => Promise<void> }) {
-  const [data, setData] = useState<Questionnaire | null>(null);
+function Questionnaire({ language, onChanged }: { language: string; onChanged: () => Promise<void> }) {
+  const [data, setData] = useState<QuestionnaireData | null>(null);
   const [sectionId, setSectionId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   const load = async () => {
-    const next = await api<Questionnaire>(`/customer/questionnaire?language=${language}`);
+    const next = await api<QuestionnaireData>(`/customer/questionnaire?language=${language}`);
     setData(next);
     setSectionId((current) => current ?? next.sections[0]?.id ?? null);
   };
 
   useEffect(() => { load().catch((reason: Error) => setError(reason.message)); }, [language]);
 
-  if (!data) return <p>{error || text(language, "loadingQuestionnaire")}</p>;
+  if (!data) return <p>{error || <Phrase language={language} k="loadingQuestionnaire" />}</p>;
   const section = data.sections.find((item) => item.id === sectionId) || data.sections[0];
 
   const collect = () => {
@@ -454,7 +455,7 @@ function Questionnaire({ language, labels, onChanged }: { language: string; labe
       await load();
       await onChanged();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : text(language, "saveFailed"));
+      setError(reason instanceof Error ? reason.message : lines(language, "saveFailed"));
     }
   };
 
@@ -464,24 +465,24 @@ function Questionnaire({ language, labels, onChanged }: { language: string; labe
         {data.sections.map((item, index) => (
           <button key={item.id} className={item.id === section?.id ? "active" : ""} onClick={() => setSectionId(item.id)}>
             <span>{String(index + 1).padStart(2, "0")}</span>
-            {item.title}
-            <small>{item.complete ? text(language, "complete") : text(language, "open")}</small>
+            <Pair language={language} english={item.english_title || item.title} translated={item.title} />
+            <small><Phrase language={language} k={item.complete ? "complete" : "open"} /></small>
           </button>
         ))}
       </aside>
       <form className="panel" onSubmit={(event) => event.preventDefault()}>
-        <p className="notice">{text(language, data.translation_status === "demonstration" ? "demonstrationNotice" : "sampleNotice")}</p>
-        <h2>{section?.title}</h2>
+        <p className="notice"><Phrase language={language} k={data.translation_status === "demonstration" ? "demonstrationNotice" : "sampleNotice"} /></p>
+        <h2>{section && <Pair language={language} english={section.english_title || section.title} translated={section.title} />}</h2>
         {section?.questions.map((question) => (
           <label key={question.id} className="question">
-            <span>{question.prompt}{question.required ? " *" : ""}</span>
+            <Pair language={language} english={`${question.english_prompt || question.prompt}${question.required ? " *" : ""}`} translated={`${question.prompt}${question.required ? " *" : ""}`} />
             {question.type === "textarea" && <textarea name={`q-${question.id}`} defaultValue={question.answer} disabled={!data.editable} />}
             {question.type === "text" && <input name={`q-${question.id}`} defaultValue={question.answer} disabled={!data.editable} />}
             {question.type === "date" && <input type="date" name={`q-${question.id}`} defaultValue={question.answer} disabled={!data.editable} />}
             {question.type === "single_choice" && (
               <select name={`q-${question.id}`} defaultValue={question.answer} disabled={!data.editable}>
-                <option value="">{text(language, "select")}</option>
-                {question.options.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
+                <option value="">{inlinePair(language, text("en", "select"), text(language, "select"))}</option>
+                {question.options.map((option) => <option key={option.code} value={option.code}>{inlinePair(language, option.english_label || option.label, option.label)}</option>)}
               </select>
             )}
             {question.type === "multi_choice" && (
@@ -489,7 +490,7 @@ function Questionnaire({ language, labels, onChanged }: { language: string; labe
                 {question.options.map((option) => (
                   <label key={option.code}>
                     <input type="checkbox" name={`q-${question.id}`} value={option.code} defaultChecked={question.answer.split(",").includes(option.code)} disabled={!data.editable} />
-                    {option.label}
+                    <Pair language={language} english={option.english_label || option.label} translated={option.label} />
                   </label>
                 ))}
               </div>
@@ -497,10 +498,10 @@ function Questionnaire({ language, labels, onChanged }: { language: string; labe
           </label>
         ))}
         <div className="row-actions">
-          <button className="btn btn-ghost" type="button" onClick={() => save(false)} disabled={!data.editable}>{labels.save}</button>
-          <button className="btn" type="button" onClick={() => save(true)} disabled={!data.editable}>{labels.submit}</button>
+          <button className="btn btn-ghost" type="button" onClick={() => save(false)} disabled={!data.editable}><Phrase language={language} k="save" /></button>
+          <button className="btn" type="button" onClick={() => save(true)} disabled={!data.editable}><Phrase language={language} k="submit" /></button>
         </div>
-        <p>{text(language, "sectionProgress", { status: statusText(language, data.response_status), done: data.sections_complete, total: data.sections_total })}</p>
+        <p><Pair language={language} english={text("en", "sectionProgress", { status: statusText("en", data.response_status), done: data.sections_complete, total: data.sections_total })} translated={text(language, "sectionProgress", { status: statusText(language, data.response_status), done: data.sections_complete, total: data.sections_total })} /></p>
         {error && <p className="form-message">{error}</p>}
       </form>
     </div>
@@ -522,10 +523,10 @@ function Documents({ language, category, requirements, onChanged }: { language: 
     <div className="stack">
       {category === "company" && (
         <div className="panel">
-          <h2>{text(language, "companyChecklist")}</h2>
-          <p>{text(language, "checklistHint")}</p>
+          <h2><Phrase language={language} k="companyChecklist" /></h2>
+          <p><Phrase language={language} k="checklistHint" /></p>
           <ul className="checklist">
-            {requirements.map((item) => <li key={item.id} className={item.satisfied ? "done" : ""}>{requirementText(language, item.code || "", item.name)}</li>)}
+            {requirements.map((item) => <li key={item.id} className={item.satisfied ? "done" : ""}><RequirementPhrase language={language} code={item.code || ""} fallback={item.name} /></li>)}
           </ul>
         </div>
       )}
@@ -543,28 +544,28 @@ function Documents({ language, category, requirements, onChanged }: { language: 
           await load();
           await onChanged();
         } catch (reason) {
-          setError(reason instanceof Error ? reason.message : text(language, "uploadFailed"));
+          setError(reason instanceof Error ? reason.message : lines(language, "uploadFailed"));
         }
       }}>
-        <h2>{text(language, category === "company" ? "uploadCompany" : "uploadOther")}</h2>
-        {category === "other" && <label>{text(language, "description")}<input name="description" required /></label>}
+        <h2><Phrase language={language} k={category === "company" ? "uploadCompany" : "uploadOther"} /></h2>
+        {category === "other" && <label><Phrase language={language} k="description" /><input name="description" required /></label>}
         {category === "company" && (
           <div className="choices">
-            {requirements.map((item) => <label key={item.id}><input type="checkbox" name="requirement" value={item.id} />{requirementText(language, item.code || "", item.name)}</label>)}
+            {requirements.map((item) => <label key={item.id}><input type="checkbox" name="requirement" value={item.id} /><RequirementPhrase language={language} code={item.code || ""} fallback={item.name} /></label>)}
           </div>
         )}
-        <label>{text(language, "file")}<input name="file" type="file" required /></label>
-        <button className="btn" type="submit">{text(language, "upload")}</button>
+        <label><Phrase language={language} k="file" /><input name="file" type="file" required /></label>
+        <button className="btn" type="submit"><Phrase language={language} k="upload" /></button>
         {error && <p className="form-message">{error}</p>}
       </form>
       <div className="panel">
-        <h2>{text(language, "uploadedFiles")}</h2>
-        {rows.length === 0 && <p>{text(language, "noDocuments")}</p>}
+        <h2><Phrase language={language} k="uploadedFiles" /></h2>
+        {rows.length === 0 && <p><Phrase language={language} k="noDocuments" /></p>}
         {rows.map((row) => (
           <article key={row.id} className="file-row">
             <div>
               <strong>{row.description || row.versions[0]?.filename}</strong>
-              <small>{statusText(language, row.status)}{row.feedback ? ` · ${row.feedback}` : ""}</small>
+              <small><StatusPhrase language={language} status={row.status} />{row.feedback ? ` · ${row.feedback}` : ""}</small>
             </div>
             <span>{row.versions[0] ? `v${row.versions[0].version_number}` : ""}</span>
           </article>
@@ -579,7 +580,7 @@ function People({ language, unlocked }: { language: string; unlocked: boolean })
   const [error, setError] = useState("");
   const load = async () => setParties((await api<{ parties: typeof parties }>("/customer/parties")).parties);
   useEffect(() => { if (unlocked) load().catch((reason: Error) => setError(reason.message)); }, [unlocked]);
-  if (!unlocked) return <div className="panel"><h2>{text(language, "peopleLockedTitle")}</h2><p>{text(language, "peopleLockedBody")}</p></div>;
+  if (!unlocked) return <div className="panel"><h2><Phrase language={language} k="peopleLockedTitle" /></h2><p><Phrase language={language} k="peopleLockedBody" /></p></div>;
   return (
     <div className="stack">
       <form className="panel form-grid" onSubmit={async (event) => {
@@ -591,28 +592,28 @@ function People({ language, unlocked }: { language: string; unlocked: boolean })
           event.currentTarget.reset();
           await load();
         } catch (reason) {
-          setError(reason instanceof Error ? reason.message : text(language, "personFailed"));
+          setError(reason instanceof Error ? reason.message : lines(language, "personFailed"));
         }
       }}>
-        <label>{text(language, "people")}
+        <label><Phrase language={language} k="people" />
           <select name="party_type">
-            <option value="director">{text(language, "director")}</option>
-            <option value="beneficial_owner">{text(language, "beneficialOwner")}</option>
-            <option value="key_controller">{text(language, "keyController")}</option>
+            <option value="director"><Phrase language={language} k="director" /></option>
+            <option value="beneficial_owner"><Phrase language={language} k="beneficialOwner" /></option>
+            <option value="key_controller"><Phrase language={language} k="keyController" /></option>
           </select>
         </label>
-        <label>{text(language, "fullName")}<input name="full_name" required /></label>
-        <label>{text(language, "nationality")}<input name="nationality" /></label>
-        <label>{text(language, "relationship")}<input name="relationship_to_organisation" /></label>
-        <label>{text(language, "ownershipPercent")}<input name="ownership_percentage" /></label>
-        <button className="btn" type="submit">{text(language, "addPerson")}</button>
+        <label><Phrase language={language} k="fullName" /><input name="full_name" required /></label>
+        <label><Phrase language={language} k="nationality" /><input name="nationality" /></label>
+        <label><Phrase language={language} k="relationship" /><input name="relationship_to_organisation" /></label>
+        <label><Phrase language={language} k="ownershipPercent" /><input name="ownership_percentage" /></label>
+        <button className="btn" type="submit"><Phrase language={language} k="addPerson" /></button>
         {error && <p className="form-message">{error}</p>}
       </form>
       <div className="panel">
         {parties.map((person) => (
           <article key={person.id} className="file-row">
             <strong>{person.full_name}</strong>
-            <span>{text(language, person.party_type === "beneficial_owner" ? "beneficialOwner" : person.party_type === "key_controller" ? "keyController" : "director")}{person.ownership_percentage ? ` · ${person.ownership_percentage}%` : ""}</span>
+            <span><Phrase language={language} k={person.party_type === "beneficial_owner" ? "beneficialOwner" : person.party_type === "key_controller" ? "keyController" : "director"} />{person.ownership_percentage ? ` · ${person.ownership_percentage}%` : ""}</span>
           </article>
         ))}
       </div>
@@ -626,7 +627,7 @@ function Requests({ language }: { language: string }) {
   useEffect(() => { load().catch(() => undefined); }, []);
   return (
     <div className="stack">
-      {rows.length === 0 && <div className="panel"><p>{text(language, "noRequests")}</p></div>}
+      {rows.length === 0 && <div className="panel"><p><Phrase language={language} k="noRequests" /></p></div>}
       {rows.map((row) => (
         <form key={row.id} className="panel" onSubmit={async (event) => {
           event.preventDefault();
@@ -634,14 +635,14 @@ function Requests({ language }: { language: string }) {
           await api(`/customer/requests/${row.id}/reply`, { method: "POST", body: JSON.stringify({ message }) });
           await load();
         }}>
-          <p className="eyebrow">{row.reference} · {statusText(language, row.status)}</p>
+          <p className="eyebrow">{row.reference} · <StatusPhrase language={language} status={row.status} /></p>
           <h2>{row.description}</h2>
-          {row.due_date && <p>{text(language, "due", { date: row.due_date })}</p>}
+          {row.due_date && <p><Phrase language={language} k="due" vars={{ date: row.due_date }} /></p>}
           {row.replies.map((reply, index) => <p key={index}>{reply.message}</p>)}
           {row.status !== "Closed" && (
             <>
-              <label>{text(language, "response")}<textarea name="message" required /></label>
-              <button className="btn" type="submit">{text(language, "sendResponse")}</button>
+              <label><Phrase language={language} k="response" /><textarea name="message" required /></label>
+              <button className="btn" type="submit"><Phrase language={language} k="sendResponse" /></button>
             </>
           )}
         </form>
@@ -653,11 +654,11 @@ function Requests({ language }: { language: string }) {
 function Notifications({ language, items, onChanged }: { language: string; items: Workspace["notifications"]; onChanged: () => Promise<void> }) {
   return (
     <div className="panel">
-      {items.length === 0 && <p>{text(language, "noNotifications")}</p>}
+      {items.length === 0 && <p><Phrase language={language} k="noNotifications" /></p>}
       {items.map((item) => (
         <article key={item.id} className="file-row">
           <div><strong>{item.title}</strong><small>{item.body}</small></div>
-          {!item.is_read && <button className="btn btn-ghost" onClick={async () => { await api(`/customer/notifications/${item.id}/read`, { method: "POST" }); await onChanged(); }}>{text(language, "markRead")}</button>}
+          {!item.is_read && <button className="btn btn-ghost" onClick={async () => { await api(`/customer/notifications/${item.id}/read`, { method: "POST" }); await onChanged(); }}><Phrase language={language} k="markRead" /></button>}
         </article>
       ))}
     </div>
@@ -675,18 +676,18 @@ function Settings({ language, onChanged }: { language: string; onChanged: () => 
           method: "POST",
           body: JSON.stringify({ current_password: form.get("current_password"), new_password: form.get("new_password") }),
         });
-        setMessage(text(language, "passwordUpdated"));
+        setMessage(lines(language, "passwordUpdated"));
         await onChanged();
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : text(language, "passwordFailed"));
+        setMessage(error instanceof Error ? error.message : lines(language, "passwordFailed"));
       }
     }}>
-      <h2>{text(language, "password")}</h2>
-      <label>{text(language, "currentPassword")}<input name="current_password" type="password" required /></label>
-      <label>{text(language, "newPassword")}<input name="new_password" type="password" minLength={8} required /></label>
-      <button className="btn" type="submit">{text(language, "updatePassword")}</button>
+      <h2><Phrase language={language} k="password" /></h2>
+      <label><Phrase language={language} k="currentPassword" /><input name="current_password" type="password" required /></label>
+      <label><Phrase language={language} k="newPassword" /><input name="new_password" type="password" minLength={8} required /></label>
+      <button className="btn" type="submit"><Phrase language={language} k="updatePassword" /></button>
       {message && <p className="form-message">{message}</p>}
-      <p>{text(language, "help")}</p>
+      <p><Phrase language={language} k="help" /></p>
     </form>
   );
 }
